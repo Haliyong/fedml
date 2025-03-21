@@ -47,7 +47,8 @@ def reload_model(model_name: str):
 
 @app.post("/retrain")
 def retrain(data: RetrainData, save_as: str = "zone_0_model_updated.pkl"):
-    global model
+    model = joblib.load(BASE_MODEL_PATH)
+    
     df = pd.DataFrame([x.dict() for x in data.features])
     y_train = pd.DataFrame({"latitude": data.latitude, "longitude": data.longitude})
 
