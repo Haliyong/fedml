@@ -30,7 +30,7 @@ def predict(data: EarthquakeData):
     return {"prediction": prediction}
 
 @app.post("/retrain")
-def retrain(data: RetrainData):
+def retrain(data: RetrainData, save_as: str = "zone_0_model_updated.pkl"):
     global model
     df = pd.DataFrame([x.dict() for x in data.features])
     y_train = pd.DataFrame({"latitude": data.latitude, "longitude": data.longitude})
@@ -38,6 +38,7 @@ def retrain(data: RetrainData):
     # Retrain model
     model.fit(df[FEATURES], y_train)
 
-    # Save updated model
-    joblib.dump(model, "zone_0_model_updated.pkl")
-    return {"message": "Model retrained and saved."}
+    # Save updated model with the specified filename
+    joblib.dump(model, save_as)
+    
+    return {"message": f"Model retrained and saved as {save_as}."}
