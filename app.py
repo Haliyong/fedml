@@ -6,7 +6,6 @@ from typing import List
 
 app = FastAPI()
 
-# Load initial model
 MODEL_PATH = "zone_0_model.pkl"
 model = joblib.load(MODEL_PATH)
 
