@@ -3,6 +3,7 @@ import pandas as pd
 import joblib
 from pydantic import BaseModel
 from typing import List
+import os
 
 app = FastAPI()
 
@@ -23,11 +24,25 @@ class RetrainData(BaseModel):
     latitude: List[float]
     longitude: List[float]
 
+@app.get("/list_models")
+def list_models():
+    models = [f for f in os.listdir() if f.endswith(".pkl")]
+    return {"saved_models": models}
+
 @app.post("/predict")
 def predict(data: EarthquakeData):
     df = pd.DataFrame([data.dict()])
     prediction = model.predict(df[FEATURES]).tolist()
     return {"prediction": prediction}
+
+@app.post("/reload_model")
+def reload_model(model_name: str):
+    global model
+    if not os.path.exists(model_name):
+        return {"error": f"Model {model_name} not found!"}
+    
+    model = joblib.load(model_name)
+    return {"message": f"✅ Model {model_name} successfully reloaded!"}
 
 @app.post("/retrain")
 def retrain(data: RetrainData, save_as: str = "zone_0_model_updated.pkl"):
