@@ -7,7 +7,7 @@ from typing import List
 app = FastAPI()
 
 # Load initial model
-MODEL_PATH = "main_model.pkl"
+MODEL_PATH = "zone_0_model.pkl"
 model = joblib.load(MODEL_PATH)
 
 FEATURES = ["depth", "mag", "gap", "dmin", "rms"]
@@ -40,5 +40,5 @@ def retrain(data: RetrainData):
     model.fit(df[FEATURES], y_train)
 
     # Save updated model
-    joblib.dump(model, "updated_model.pkl")
+    joblib.dump(model, "zone_0_model_updated.pkl")
     return {"message": "Model retrained and saved."}
