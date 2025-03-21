@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 import pandas as pd
 import joblib
 from pydantic import BaseModel
@@ -7,8 +8,8 @@ import os
 
 app = FastAPI()
 
-MODEL_PATH = "zone_0_model.pkl"
-model = joblib.load(MODEL_PATH)
+BASE_MODEL_PATH = "zone_0_model.pkl"
+model = joblib.load(BASE_MODEL_PATH)
 
 FEATURES = ["depth", "mag", "gap", "dmin", "rms"]
 
@@ -57,3 +58,18 @@ def retrain(data: RetrainData, save_as: str = "zone_0_model_updated.pkl"):
     joblib.dump(model, save_as)
     
     return {"message": f"Model retrained and saved as {save_as}."}
+
+@app.get("/download_model")
+def download_model(model_name: str):
+    if not os.path.exists(model_name):
+        raise HTTPException(status_code=404, detail="Model not found")
+    
+    return FileResponse(model_name, filename=model_name, media_type="application/octet-stream")
+
+@app.post("/upload_model")
+def upload_model(file: UploadFile = File(...)):
+    file_path = f"./{file.filename}"
+    with open(file_path, "wb") as buffer:
+        buffer.write(file.file.read())
+    
+    return {"message": f"✅ Model {file.filename} uploaded successfully!"}
