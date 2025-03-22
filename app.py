@@ -31,10 +31,17 @@ def list_models():
     return {"saved_models": models}
 
 @app.post("/predict")
-def predict(data: EarthquakeData):
-    df = pd.DataFrame([data.dict()])
-    prediction = model.predict(df[FEATURES]).tolist()
-    return {"prediction": prediction}
+def predict(zone: str):
+    file_path = f"seismic_{zone}_val.csv"
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail=f"Dataset {file_path} not found!")
+
+    df = pd.read_csv(file_path)
+    X_test = df[FEATURES]
+
+    predictions = model.predict(X_test).tolist()
+    return {"predictions": predictions}
 
 @app.post("/reload_model")
 def reload_model(model_name: str):
@@ -46,19 +53,23 @@ def reload_model(model_name: str):
     return {"message": f"✅ Model {model_name} successfully reloaded!"}
 
 @app.post("/retrain")
-def retrain(data: RetrainData, save_as: str = "zone_0_model_updated.pkl"):
-    model = joblib.load(BASE_MODEL_PATH)
-    
-    df = pd.DataFrame([x.dict() for x in data.features])
-    y_train = pd.DataFrame({"latitude": data.latitude, "longitude": data.longitude})
+def retrain(zone: str, save_as: str = "zone_0_model_updated.pkl"):
+    file_path = f"seismic_{zone}.csv"
 
-    # Retrain model
-    model.fit(df[FEATURES], y_train)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail=f"Dataset {file_path} not found!")
 
-    # Save updated model with the specified filename
+    df = pd.read_csv(file_path)
+    X_train = df[FEATURES]
+    y_train = df[["latitude", "longitude"]]
+
+    # Retrain the model
+    model.fit(X_train, y_train)
+
+    # Save the updated model
     joblib.dump(model, save_as)
-    
-    return {"message": f"Model retrained and saved as {save_as}."}
+
+    return {"message": f"✅ Model retrained on {file_path} and saved as {save_as}."}
 
 @app.get("/download_model")
 def download_model(model_name: str):
@@ -74,3 +85,11 @@ def upload_model(file: UploadFile = File(...)):
         buffer.write(file.file.read())
     
     return {"message": f"✅ Model {file.filename} uploaded successfully!"}
+
+@app.get("/current_model")
+def current_model():
+    return {
+        "message": "📢 Currently loaded model",
+        "model_name": BASE_MODEL_PATH,
+        "model_type": type(model).__name__
+    }
