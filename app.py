@@ -5,6 +5,7 @@ import joblib
 from pydantic import BaseModel
 from typing import List
 import os
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 app = FastAPI()
 
@@ -42,6 +43,36 @@ def predict(zone: str = Query(..., description="Zone to load local validation da
 
     predictions = model.predict(X_test).tolist()
     return {"predictions": predictions}
+
+@app.post("/evaluate")
+def evaluate(zone: str = Query(..., description="Zone to evaluate model performance on")):
+    val_file = f"seismic_{zone}_val.csv"
+
+    if not os.path.exists(val_file):
+        raise HTTPException(status_code=404, detail=f"Validation dataset {val_file} not found!")
+
+    df = pd.read_csv(val_file)
+    X_test = df[FEATURES]
+    y_true = df[["latitude", "longitude"]]
+
+    predictions = model.predict(X_test)
+    y_pred = pd.DataFrame(predictions, columns=["latitude", "longitude"])
+
+    # Compute metrics
+    mse_lat = mean_squared_error(y_true["latitude"], y_pred["latitude"])
+    mse_lon = mean_squared_error(y_true["longitude"], y_pred["longitude"])
+
+    r2_lat = r2_score(y_true["latitude"], y_pred["latitude"])
+    r2_lon = r2_score(y_true["longitude"], y_pred["longitude"])
+
+    mae_lat = mean_absolute_error(y_true["latitude"], y_pred["latitude"])
+    mae_lon = mean_absolute_error(y_true["longitude"], y_pred["longitude"])
+
+    return {
+        "MSE": {"latitude": mse_lat, "longitude": mse_lon},
+        "R2": {"latitude": r2_lat, "longitude": r2_lon},
+        "MAE": {"latitude": mae_lat, "longitude": mae_lon}
+    }
 
 @app.post("/reload_model")
 def reload_model(model_name: str):
