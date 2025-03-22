@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.responses import FileResponse
 import pandas as pd
 import joblib
@@ -31,7 +31,7 @@ def list_models():
     return {"saved_models": models}
 
 @app.post("/predict")
-def predict(zone: str):
+def predict(zone: str = Query(..., description="Zone to load local validation data from")):
     file_path = f"seismic_{zone}_val.csv"
 
     if not os.path.exists(file_path):
@@ -52,8 +52,11 @@ def reload_model(model_name: str):
     model = joblib.load(model_name)
     return {"message": f"✅ Model {model_name} successfully reloaded!"}
 
+from fastapi import Query
+
 @app.post("/retrain")
-def retrain(zone: str, save_as: str = "zone_0_model_updated.pkl"):
+def retrain(zone: str = Query(..., description="Zone dataset to use for retraining"),
+            save_as: str = "zone_0_model_updated.pkl"):
     file_path = f"seismic_{zone}.csv"
 
     if not os.path.exists(file_path):
