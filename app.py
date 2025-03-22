@@ -6,6 +6,8 @@ from pydantic import BaseModel
 from typing import List
 import os
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+import datetime
+import glob
 
 app = FastAPI()
 
@@ -20,11 +22,6 @@ class EarthquakeData(BaseModel):
     gap: float
     dmin: float
     rms: float
-
-class RetrainData(BaseModel):
-    features: List[EarthquakeData]
-    latitude: List[float]
-    longitude: List[float]
 
 @app.get("/list_models")
 def list_models():
@@ -42,23 +39,39 @@ def predict(zone: str = Query(..., description="Zone to load local validation da
     X_test = df[FEATURES]
 
     predictions = model.predict(X_test).tolist()
-    return {"predictions": predictions}
+    
+    # Generate timestamped filename
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    pred_filename = f"predictions_{zone}_{timestamp}.csv"
+    latest_filename = f"predictions_{zone}_latest.csv"
+
+    # Save predictions
+    predictions_df = pd.DataFrame(predictions, columns=["latitude", "longitude"])
+    predictions_df.to_csv(pred_filename, index=False)
+    predictions_df.to_csv(latest_filename, index=False)  # Keep latest predictions easily accessible
+
+    return {"message": f"✅ Predictions saved as {pred_filename}", "latest_file": latest_filename}
 
 @app.post("/evaluate")
-def evaluate(zone: str = Query(..., description="Zone to evaluate model performance on")):
+def evaluate(
+    zone: str = Query(..., description="Zone to evaluate model performance on"),
+    pred_file: str = Query(None, description="Prediction file to use (default is latest prediction)")
+):
     val_file = f"seismic_{zone}_val.csv"
+    default_pred_file = f"predictions_{zone}_latest.csv"
+    pred_file = pred_file if pred_file else default_pred_file
 
     if not os.path.exists(val_file):
         raise HTTPException(status_code=404, detail=f"Validation dataset {val_file} not found!")
 
+    if not os.path.exists(pred_file):
+        raise HTTPException(status_code=404, detail=f"Predictions file {pred_file} not found! Run /predict first.")
+
     df = pd.read_csv(val_file)
-    X_test = df[FEATURES]
     y_true = df[["latitude", "longitude"]]
 
-    predictions = model.predict(X_test)
-    y_pred = pd.DataFrame(predictions, columns=["latitude", "longitude"])
+    y_pred = pd.read_csv(pred_file)
 
-    # Compute metrics
     mse_lat = mean_squared_error(y_true["latitude"], y_pred["latitude"])
     mse_lon = mean_squared_error(y_true["longitude"], y_pred["longitude"])
 
@@ -71,7 +84,23 @@ def evaluate(zone: str = Query(..., description="Zone to evaluate model performa
     return {
         "MSE": {"latitude": mse_lat, "longitude": mse_lon},
         "R2": {"latitude": r2_lat, "longitude": r2_lon},
-        "MAE": {"latitude": mae_lat, "longitude": mae_lon}
+        "MAE": {"latitude": mae_lat, "longitude": mae_lon},
+        "evaluated_predictions": pred_file
+    }
+
+@app.get("/list_predictions")
+def list_predictions():
+    pred_files = glob.glob("predictions_*.csv")
+    latest_predictions = {}
+
+    for file in pred_files:
+        if "_latest.csv" in file:
+            zone = file.split("_")[1] 
+            latest_predictions[zone] = file
+
+    return {
+        "available_predictions": pred_files,
+        "latest_per_zone": latest_predictions
     }
 
 @app.post("/reload_model")
@@ -82,8 +111,6 @@ def reload_model(model_name: str):
     
     model = joblib.load(model_name)
     return {"message": f"✅ Model {model_name} successfully reloaded!"}
-
-from fastapi import Query
 
 @app.post("/retrain")
 def retrain(zone: str = Query(..., description="Zone dataset to use for retraining"),
